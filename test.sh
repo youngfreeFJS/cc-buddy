@@ -396,6 +396,237 @@ else
 fi
 
 echo ""
+echo "=== 配置文件读取：不存在时使用默认值 ==="
+
+rm -f .claude/cc-buddy.json
+
+if python3 -c "
+import subprocess, json
+result = subprocess.run(['bash', 'hooks-handlers/session-start.sh'], capture_output=True, text=True)
+data = json.loads(result.stdout)
+ctx = data['hookSpecificOutput']['additionalContext']
+assert 'ls, cd, cat, pwd, git status' in ctx, 'default skip list missing'
+" 2>/dev/null; then
+  pass "config file absent: uses default skip list"
+else
+  fail "config file absent: default skip list not found"
+fi
+
+echo ""
+echo "=== 配置文件读取：格式错误时静默忽略 ==="
+
+mkdir -p .claude
+echo "{ invalid json" > .claude/cc-buddy.json
+
+if python3 -c "
+import subprocess, json
+result = subprocess.run(['bash', 'hooks-handlers/session-start.sh'], capture_output=True, text=True)
+data = json.loads(result.stdout)
+ctx = data['hookSpecificOutput']['additionalContext']
+assert 'ls, cd, cat, pwd, git status' in ctx, 'should fallback to default'
+" 2>/dev/null; then
+  pass "config file malformed: falls back to default"
+else
+  fail "config file malformed: did not fall back to default"
+fi
+
+rm -f .claude/cc-buddy.json
+
+echo ""
+echo "=== 配置文件读取：正确格式时读取成功 ==="
+
+mkdir -p .claude
+cat > .claude/cc-buddy.json <<'CONFIGEOF'
+{
+  "verbosity": "normal",
+  "skip": ["npm install", "docker ps"],
+  "skipPatterns": ["^echo "],
+  "dangerousCommands": ["rm -rf", "DROP TABLE"]
+}
+CONFIGEOF
+
+if python3 -c "
+import subprocess, json
+result = subprocess.run(['bash', 'hooks-handlers/session-start.sh'], capture_output=True, text=True)
+data = json.loads(result.stdout)
+ctx = data['hookSpecificOutput']['additionalContext']
+assert 'npm install' in ctx or 'docker ps' in ctx, 'user skip list not found'
+" 2>/dev/null; then
+  pass "config file valid: user skip list loaded"
+else
+  fail "config file valid: user skip list not loaded"
+fi
+
+rm -f .claude/cc-buddy.json
+
+echo ""
+echo "=== verbosity: minimal 模式 ==="
+
+mkdir -p .claude
+cat > .claude/cc-buddy.json <<'CONFIGEOF'
+{
+  "verbosity": "minimal"
+}
+CONFIGEOF
+
+if python3 -c "
+import subprocess, json
+result = subprocess.run(['bash', 'hooks-handlers/session-start.sh'], capture_output=True, text=True)
+data = json.loads(result.stdout)
+ctx = data['hookSpecificOutput']['additionalContext']
+assert 'minimal mode' in ctx, 'minimal mode indicator missing'
+assert 'Only explain dangerous operations' in ctx, 'minimal mode instruction missing'
+" 2>/dev/null; then
+  pass "verbosity: minimal mode prompt generated"
+else
+  fail "verbosity: minimal mode prompt not correct"
+fi
+
+rm -f .claude/cc-buddy.json
+
+echo ""
+echo "=== verbosity: normal 模式 ==="
+
+mkdir -p .claude
+cat > .claude/cc-buddy.json <<'CONFIGEOF'
+{
+  "verbosity": "normal"
+}
+CONFIGEOF
+
+if python3 -c "
+import subprocess, json
+result = subprocess.run(['bash', 'hooks-handlers/session-start.sh'], capture_output=True, text=True)
+data = json.loads(result.stdout)
+ctx = data['hookSpecificOutput']['additionalContext']
+assert 'ls, cd, cat, pwd, git status' in ctx, 'normal mode default skip list missing'
+assert 'minimal mode' not in ctx and 'verbose mode' not in ctx, 'mode indicator should not appear in normal'
+" 2>/dev/null; then
+  pass "verbosity: normal mode prompt generated"
+else
+  fail "verbosity: normal mode prompt not correct"
+fi
+
+rm -f .claude/cc-buddy.json
+
+echo ""
+echo "=== verbosity: verbose 模式 ==="
+
+mkdir -p .claude
+cat > .claude/cc-buddy.json <<'CONFIGEOF'
+{
+  "verbosity": "verbose"
+}
+CONFIGEOF
+
+if python3 -c "
+import subprocess, json
+result = subprocess.run(['bash', 'hooks-handlers/session-start.sh'], capture_output=True, text=True)
+data = json.loads(result.stdout)
+ctx = data['hookSpecificOutput']['additionalContext']
+assert 'verbose mode' in ctx, 'verbose mode indicator missing'
+assert 'ANY operation' in ctx, 'verbose mode instruction missing'
+" 2>/dev/null; then
+  pass "verbosity: verbose mode prompt generated"
+else
+  fail "verbosity: verbose mode prompt not correct"
+fi
+
+rm -f .claude/cc-buddy.json
+
+echo ""
+echo "=== 用户自定义 skip 列表追加到默认列表 ==="
+
+mkdir -p .claude
+cat > .claude/cc-buddy.json <<'CONFIGEOF'
+{
+  "skip": ["npm install", "yarn add"]
+}
+CONFIGEOF
+
+if python3 -c "
+import subprocess, json
+result = subprocess.run(['bash', 'hooks-handlers/session-start.sh'], capture_output=True, text=True)
+data = json.loads(result.stdout)
+ctx = data['hookSpecificOutput']['additionalContext']
+assert 'ls, cd, cat, pwd, git status' in ctx, 'default skip list missing'
+assert 'npm install' in ctx, 'user skip list not appended'
+" 2>/dev/null; then
+  pass "user skip list: appended to default"
+else
+  fail "user skip list: not appended correctly"
+fi
+
+rm -f .claude/cc-buddy.json
+
+echo ""
+echo "=== 用户自定义 skipPatterns 正则列表 ==="
+
+mkdir -p .claude
+cat > .claude/cc-buddy.json <<'CONFIGEOF'
+{
+  "skipPatterns": ["^echo ", ".*--help$"]
+}
+CONFIGEOF
+
+if python3 -c "
+import subprocess, json
+result = subprocess.run(['bash', 'hooks-handlers/session-start.sh'], capture_output=True, text=True)
+data = json.loads(result.stdout)
+ctx = data['hookSpecificOutput']['additionalContext']
+# skipPatterns 目前未在 prompt 中直接体现，但配置应该能被读取
+# 这里只验证配置不会导致错误
+assert len(ctx) > 0, 'additionalContext should not be empty'
+" 2>/dev/null; then
+  pass "skipPatterns: config accepted without error"
+else
+  fail "skipPatterns: config caused error"
+fi
+
+rm -f .claude/cc-buddy.json
+
+echo ""
+echo "=== 默认危险命令列表存在 ==="
+
+rm -f .claude/cc-buddy.json
+
+if python3 -c "
+import subprocess, json
+result = subprocess.run(['bash', 'hooks-handlers/session-start.sh'], capture_output=True, text=True)
+data = json.loads(result.stdout)
+ctx = data['hookSpecificOutput']['additionalContext']
+assert 'rm -rf' in ctx, 'default dangerous command missing'
+" 2>/dev/null; then
+  pass "dangerous commands: default list present"
+else
+  fail "dangerous commands: default list missing"
+fi
+
+echo ""
+echo "=== 用户自定义危险命令追加 ==="
+
+mkdir -p .claude
+cat > .claude/cc-buddy.json <<'CONFIGEOF'
+{
+  "dangerousCommands": ["rm -rf", "DROP TABLE", "custom-danger"]
+}
+CONFIGEOF
+
+if python3 -c "
+import subprocess, json
+result = subprocess.run(['bash', 'hooks-handlers/session-start.sh'], capture_output=True, text=True)
+data = json.loads(result.stdout)
+ctx = data['hookSpecificOutput']['additionalContext']
+assert 'custom-danger' in ctx, 'user dangerous command not found'
+" 2>/dev/null; then
+  pass "dangerous commands: user list appended"
+else
+  fail "dangerous commands: user list not appended"
+fi
+
+rm -rf .claude
+
+echo ""
 echo "=== 结果 ==="
 echo "  通过: $PASS  失败: $FAIL"
 echo ""

@@ -43,6 +43,53 @@ Then open a new cc tab or shell to activate.
     66 -     "borderRadius": 45,
     66 +     "borderRadius": 0,
 
+## Configuration
+
+cc-buddy can be customized per project by creating a `.claude/cc-buddy.json` file in your project root.
+
+### Example configuration
+
+```json
+{
+  "verbosity": "normal",
+  "skip": [
+    "npm install",
+    "docker ps"
+  ],
+  "skipPatterns": [
+    "^echo ",
+    ".*--help$"
+  ],
+  "dangerousCommands": [
+    "rm -rf",
+    "DROP TABLE"
+  ]
+}
+```
+
+### Configuration options
+
+**verbosity** (string, default: `"normal"`)
+- `"minimal"`: Only explain dangerous operations
+- `"normal"`: Skip trivially obvious commands (ls, cd, cat, etc.)
+- `"verbose"`: Explain every operation, including ls and cd
+
+**skip** (array of strings, default: `[]`)
+- Commands to skip explanation (exact match)
+- Example: `"npm install"` matches only `npm install`, not `npm install axios`
+
+**skipPatterns** (array of regex strings, default: `[]`)
+- Regular expressions for batch matching
+- Example: `"^npm install"` matches all commands starting with `npm install`
+
+**dangerousCommands** (array of strings, default: `["rm -rf", "DROP", "DELETE FROM", "TRUNCATE"]`)
+- Commands that will trigger risk warnings
+- Dangerous operations show: `⚠️ Risk: ...`
+
+### Default behavior
+
+Without a config file, cc-buddy uses `verbosity: "normal"` and skips: `ls, cd, cat, pwd, git status`.
+
 ## How It Works
 
 ```
