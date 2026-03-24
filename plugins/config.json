@@ -1,0 +1,38 @@
+{
+  "pre": [
+    {
+      "name": "block-dangerous",
+      "enabled": true,
+      "matcher": "Bash",
+      "priority": 100,
+      "script": "plugins/pre/block-dangerous.sh",
+      "description": "阻止危险的 shell 命令"
+    },
+    {
+      "name": "protect-secrets",
+      "enabled": true,
+      "matcher": "Read|Edit|Write",
+      "priority": 90,
+      "script": "plugins/pre/protect-secrets.sh",
+      "description": "保护敏感文件不被访问"
+    }
+  ],
+  "post": [
+    {
+      "name": "auto-format",
+      "enabled": true,
+      "matcher": "Edit|Write",
+      "priority": 100,
+      "script": "plugins/post/auto-format.sh",
+      "description": "自动格式化代码"
+    },
+    {
+      "name": "auto-test",
+      "enabled": false,
+      "matcher": "Edit|Write",
+      "priority": 50,
+      "script": "plugins/post/auto-test.sh",
+      "description": "自动运行相关测试"
+    }
+  ]
+}
